@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Churn Risk Radar — emBlue CSM</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:    #0D0D0D;
+      --card:  #1A1A2E;
+      --border:#2a2a4a;
+      --accent:#00D4FF;
+      --danger:#FF4757;
+      --warn:  #FFA502;
+      --ok:    #2ED573;
+      --muted: #6b7280;
+      --text:  #e5e7eb;
+      --mono:  'Space Mono', monospace;
+      --sans:  'DM Sans', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-family: var(--mono);
+      font-size: 1.4rem;
+      color: var(--danger);
+    }
+
+    header p { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+
+    .badge {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    /* ── KPIs ── */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .kpi {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1rem;
+    }
+
+    .kpi .label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .kpi .value {
+      font-family: var(--mono);
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .kpi .sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.35rem; }
+    .kpi.d .value { color: var(--danger); }
+    .kpi.w .value { color: var(--warn); }
+    .kpi.a .value { color: var(--accent); }
+    .kpi.o .value { color: var(--ok); }
+
+    /* ── Grid 2 cols ── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 768px) { .main-grid { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+
+    .panel h2 {
+      font-family: var(--mono);
+      font-size: 0.88rem;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    /* ── Churn list ── */
+    .churn-list { display: flex; flex-direction: column; gap: 0.6rem; }
+
+    .churn-item {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.75rem;
+      background: rgba(255,71,87,0.05);
+      border: 1px solid rgba(255,71,87,0.15);
+      border-radius: 7px;
+      transition: border-color 0.15s;
+    }
+
+    .churn-item.warn {
+      background: rgba(255,165,2,0.05);
+      border-color: rgba(255,165,2,0.15);
+    }
+
+    .churn-item:hover { border-color: var(--accent); }
+
+    .churn-name { font-size: 0.85rem; font-weight: 600; }
+    .churn-meta { font-size: 0.72rem; color: var(--muted); margin-top: 0.15rem; }
+
+    .score-pill {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: 5px;
+    }
+
+    .score-pill.critical { background: rgba(255,71,87,0.2);  color: var(--danger); }
+    .score-pill.high     { background: rgba(255,165,2,0.2);  color: var(--warn); }
+
+    .days-badge {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* ── Gráfico ── */
+    .chart-wrap { position: relative; height: 220px; }
+
+    /* ── Tabla renegociación ── */
+    .reneg-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    .reneg-table th {
+      color: var(--muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.5rem 0.6rem;
+      text-align: left;
+      font-family: var(--mono);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .reneg-table td {
+      padding: 0.6rem;
+      border-bottom: 1px solid rgba(42,42,74,0.5);
+      vertical-align: middle;
+    }
+
+    .reneg-table tr:last-child td { border-bottom: none; }
+    .reneg-table tr:hover td { background: rgba(0,212,255,0.03); }
+
+    .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    .tag.r { background: rgba(255,71,87,0.15);  color: var(--danger); }
+    .tag.p { background: rgba(0,212,255,0.1);   color: var(--accent); }
+    .tag.e { background: rgba(255,165,2,0.15);  color: var(--warn); }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding-top: 1rem;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    footer p { font-size: 0.75rem; color: var(--muted); }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Header -->
+  <header>
+    <div>
+      <h1>Churn Risk Radar</h1>
+      <p>Renegociación activa · 16 cuentas en foco crítico</p>
+    </div>
+    <div class="badge" id="last-updated">—</div>
+  </header>
+
+  <!-- 2. KPIs -->
+  <div class="kpis">
+    <div class="kpi d">
+      <div class="label">Crítico</div>
+      <div class="value" id="k-critical">—</div>
+      <div class="sub">acción inmediata</div>
+    </div>
+    <div class="kpi w">
+      <div class="label">Alto riesgo</div>
+      <div class="value" id="k-high">—</div>
+      <div class="sub">revisar esta semana</div>
+    </div>
+    <div class="kpi a">
+      <div class="label">En renegociación</div>
+      <div class="value" id="k-reneg">16</div>
+      <div class="sub">cuentas en pipeline</div>
+    </div>
+    <div class="kpi o">
+      <div class="label">NRR promedio</div>
+      <div class="value" id="k-nrr">—</div>
+      <div class="sub">% renegociación</div>
+    </div>
+  </div>
+
+  <!-- 3. Main grid -->
+  <div class="main-grid">
+
+    <!-- Cuentas en riesgo crítico/alto -->
+    <div class="panel">
+      <h2>Cuentas en riesgo — acción requerida</h2>
+      <div class="churn-list" id="churn-list">
+        <div style="color:var(--muted);font-size:0.82rem;">Cargando...</div>
+      </div>
+    </div>
+
+    <!-- Gráfico distribución por risk level -->
+    <div class="panel">
+      <h2>Distribución de riesgo</h2>
+      <div class="chart-wrap">
+        <canvas id="risk-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Tabla renegociación detalle -->
+    <div class="panel" style="grid-column: 1 / -1;">
+      <h2>Pipeline Renegociación — detalle</h2>
+      <div style="overflow-x:auto;">
+        <table class="reneg-table" id="reneg-table">
+          <thead>
+            <tr>
+              <th>Cuenta</th>
+              <th>Score</th>
+              <th>NRR</th>
+              <th>Días sin login</th>
+              <th>Engagement</th>
+              <th>Etapa</th>
+              <th>Prioridad</th>
+            </tr>
+          </thead>
+          <tbody id="reneg-body">
+            <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 5. Footer -->
+  <footer>
+    <p>OPS_CSM_CORE · Churn Risk Radar v1</p>
+    <p>Powered by Claude · <a href="https://claude.ai" target="_blank">claude.ai</a></p>
+  </footer>
+
+  <script>
+    const SUPABASE_URL  = window.ENV_SUPABASE_URL  || '';
+    const SUPABASE_ANON = window.ENV_SUPABASE_ANON || '';
+
+    function daysSince(iso) {
+      if (!iso) return null;
+      return Math.floor((Date.now() - new Date(iso)) / 86400000);
+    }
+
+    // Demo data
+    const DEMO = [
+      { pipedrive_deal_id: 1001, account_name: 'Cuenta Alpha',   score: 18, risk_level: 'critical', nrr: 72,  engagement_rate: 3.1,  last_login: new Date(Date.now() - 45*86400000).toISOString(), stage: 'Renegociación' },
+      { pipedrive_deal_id: 1002, account_name: 'Cuenta Beta',    score: 24, risk_level: 'critical', nrr: 80,  engagement_rate: 5.2,  last_login: new Date(Date.now() - 38*86400000).toISOString(), stage: 'Renegociación' },
+      { pipedrive_deal_id: 1003, account_name: 'Cuenta Gamma',   score: 31, risk_level: 'high',     nrr: 85,  engagement_rate: 7.8,  last_login: new Date(Date.now() - 30*86400000).toISOString(), stage: 'Renegociación' },
+      { pipedrive_deal_id: 1004, account_name: 'Cuenta Delta',   score: 38, risk_level: 'high',     nrr: 87,  engagement_rate: 9.1,  last_login: new Date(Date.now() - 25*86400000).toISOString(), stage: 'Renegociación' },
+      { pipedrive_deal_id: 1005, account_name: 'Cuenta Epsilon', score: 44, risk_level: 'high',     nrr: 88,  engagement_rate: 10.5, last_login: new Date(Date.now() - 20*86400000).toISOString(), stage: 'Renegociación' },
+      { pipedrive_deal_id: 1006, account_name: 'Cuenta Zeta',    score: 52, risk_level: 'medium',   nrr: 91,  engagement_rate: 14.2, last_login: new Date(Date.now() - 18*86400000).toISOString(), stage: 'Renegociación' },
+      { pipedrive_deal_id: 1007, account_name: 'Cuenta Eta',     score: 58, risk_level: 'medium',   nrr: 93,  engagement_rate: 17.0, last_login: new Date(Date.now() - 14*86400000).toISOString(), stage: 'Renegociación' },
+      { pipedrive_deal_id: 1008, account_name: 'Cuenta Theta',   score: 61, risk_level: 'medium',   nrr: 94,  engagement_rate: 19.3, last_login: new Date(Date.now() - 12*86400000).toISOString(), stage: 'Renegociación' },
+    ];
+
+    function renderChurnList(rows) {
+      const list = document.getElementById('churn-list');
+      const urgent = rows.filter(r => r.risk_level === 'critical' || r.risk_level === 'high');
+
+      if (!urgent.length) {
+        list.innerHTML = `<p style="color:var(--ok);font-size:0.82rem;">Sin cuentas críticas activas.</p>`;
+        return;
+      }
+
+      list.innerHTML = urgent.map(r => {
+        const d = daysSince(r.last_login);
+        const cls = r.risk_level === 'critical' ? '' : 'warn';
+        return `<div class="churn-item ${cls}">
+          <div>
+            <div class="churn-name">${r.account_name || `Deal #${r.pipedrive_deal_id}`}</div>
+            <div class="churn-meta">NRR ${r.nrr ?? '—'}% · Engagement ${r.engagement_rate ?? '—'}%</div>
+          </div>
+          <span class="score-pill ${r.risk_level}">${r.score}</span>
+          <span class="days-badge">${d !== null ? `${d}d sin login` : '—'}</span>
+        </div>`;
+      }).join('');
+    }
+
+    let riskChart = null;
+
+    function renderRiskChart(rows) {
+      const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+      rows.forEach(r => { if (counts[r.risk_level] !== undefined) counts[r.risk_level]++; });
+
+      document.getElementById('k-critical').textContent = counts.critical;
+      document.getElementById('k-high').textContent     = counts.high;
+      const nrrVals = rows.filter(r => r.nrr).map(r => r.nrr);
+      document.getElementById('k-nrr').textContent =
+        nrrVals.length ? Math.round(nrrVals.reduce((a, b) => a + b, 0) / nrrVals.length) + '%' : '—';
+
+      const ctx = document.getElementById('risk-chart').getContext('2d');
+      if (riskChart) riskChart.destroy();
+      riskChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Crítico', 'Alto', 'Medio', 'OK'],
+          datasets: [{
+            data: [counts.critical, counts.high, counts.medium, counts.low],
+            backgroundColor: ['#FF4757', '#FFA502', '#00D4FF', '#2ED573'],
+            borderColor: '#1A1A2E',
+            borderWidth: 3,
+            hoverOffset: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '65%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: '#6b7280',
+                font: { family: 'DM Sans', size: 12 },
+                boxWidth: 12,
+                padding: 16,
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` ${ctx.label}: ${ctx.parsed} cuentas`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderRenegTable(rows) {
+      const body = document.getElementById('reneg-body');
+
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);">Sin datos</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = rows.map(r => {
+        const d = daysSince(r.last_login);
+        const priority = r.score < 30 ? `<span class="tag r">CRÍTICO</span>`
+                       : r.score < 50 ? `<span class="tag e">ALTO</span>`
+                       :                `<span class="tag p">SEGUIMIENTO</span>`;
+        const scoreColor = r.score < 30 ? 'var(--danger)' : r.score < 50 ? 'var(--warn)' : 'var(--accent)';
+        return `<tr>
+          <td style="font-weight:600">${r.account_name || `Deal #${r.pipedrive_deal_id}`}</td>
+          <td style="font-family:var(--mono);color:${scoreColor}">${r.score}</td>
+          <td style="font-family:var(--mono)">${r.nrr ?? '—'}%</td>
+          <td style="font-family:var(--mono);color:${d > 30 ? 'var(--danger)' : 'var(--muted)'}">${d !== null ? d : '—'}</td>
+          <td style="font-family:var(--mono)">${r.engagement_rate ?? '—'}%</td>
+          <td style="color:var(--muted);font-size:0.78rem">${r.stage || 'Renegociación'}</td>
+          <td>${priority}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function loadData() {
+      document.getElementById('last-updated').textContent =
+        new Date().toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });
+
+      let rows = DEMO;
+
+      if (SUPABASE_URL && SUPABASE_ANON) {
+        try {
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/v_churn_radar?order=score.asc`,
+            { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+          );
+          if (res.ok) rows = await res.json();
+        } catch (e) { console.error(e); }
+      }
+
+      renderChurnList(rows);
+      renderRiskChart(rows);
+      renderRenegTable(rows);
+    }
+
+    loadData();
+    setInterval(loadData, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
