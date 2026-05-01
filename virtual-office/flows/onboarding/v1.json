@@ -1,0 +1,226 @@
+{
+  "name": "OPS_onboarding_sequence_v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "onboarding-kickoff",
+        "responseMode": "responseNode"
+      },
+      "id": "node-webhook",
+      "name": "Webhook — Deal a Business Kickoff",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [200, 300],
+      "notes": "Configurar en Pipedrive: Automation → cuando deal entra en stage Business Kickoff → POST a este webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer datos del deal desde el webhook de Pipedrive\nconst body = $input.first().json.body || $input.first().json;\nconst deal = body.current || body;\n\nreturn [{\n  json: {\n    deal_id:       deal.id,\n    title:         deal.title,\n    owner_name:    deal.owner_name,\n    contact_email: body.person?.primary_email || '',\n    contact_name:  body.person?.name || '',\n    value:         deal.value,\n    currency:      deal.currency,\n    started_at:    new Date().toISOString(),\n    kickoff_date:  new Date(Date.now() + 2*86400000).toISOString().split('T')[0],\n  }\n}];"
+      },
+      "id": "node-extract",
+      "name": "Extraer datos del deal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/csm_interactions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ deal_id: $json.deal_id, type: 'note', summary: `Onboarding iniciado — Business Kickoff programado para ${$json.kickoff_date}`, next_action: 'Confirmar asistencia al Business Kickoff', next_date: $json.kickoff_date }) }}"
+      },
+      "id": "node-log-start",
+      "name": "Registrar inicio en Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [640, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RESEND_API_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ from: 'manger.c@embluemail.com', to: $json.contact_email, subject: `¡Bienvenido a emBlue, ${$json.contact_name}! Empezamos el ${$json.kickoff_date}`, html: `<h2>Hola ${$json.contact_name},</h2><p>¡Ya estás listo para empezar con emBlue!</p><p>Tu <strong>Business Kickoff</strong> está programado para el <strong>${$json.kickoff_date}</strong>.</p><p>En esa sesión vamos a:</p><ul><li>Definir tus objetivos y KPIs</li><li>Programar tus primeras campañas</li><li>Asegurarnos de que todo esté configurado</li></ul><p>Si necesitas cambiar la fecha, simplemente responde este email.</p><p>¡Nos vemos pronto!</p><p><strong>Manger Canterac</strong><br>Customer Success Manager · emBlue</p>` }) }}"
+      },
+      "id": "node-welcome-email",
+      "name": "Email de bienvenida",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.PIPEDRIVE_DOMAIN }}/api/v1/activities",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "api_token", "value": "={{ $env.PIPEDRIVE_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ subject: `Business Kickoff — ${$json.title}`, deal_id: $json.deal_id, type: 'meeting', due_date: $json.kickoff_date, due_time: '10:00', note: 'Agenda: objetivos, KPIs, primeras campañas, configuración pendiente.' }) }}"
+      },
+      "id": "node-create-kickoff",
+      "name": "Crear evento Kickoff en Pipedrive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [640, 420]
+    },
+    {
+      "parameters": { "amount": 14, "unit": "days" },
+      "id": "node-wait-d14",
+      "name": "Esperar 14 días",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/csm_interactions",
+        "sendHeaders": true,
+        "sendQuery": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            { "name": "deal_id", "value": "=eq.{{ $json.deal_id }}" },
+            { "name": "summary", "value": "=ilike.*primera campaña*" }
+          ]
+        }
+      },
+      "id": "node-check-campaign",
+      "name": "¿Tiene primera campaña?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "node-no-campaign-check",
+      "name": "Sin primera campaña?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.PIPEDRIVE_DOMAIN }}/api/v1/activities",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "api_token", "value": "={{ $env.PIPEDRIVE_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ subject: `⚠️ Sin primera campaña — ${$json.title} (día 14)`, deal_id: $json.deal_id, type: 'call', due_date: new Date().toISOString().split('T')[0], due_time: '09:00', note: 'ALERTA: 14 días sin primera campaña. Llamar HOY para desbloquear. Causa probable: falta de tiempo o dificultad técnica.' }) }}"
+      },
+      "id": "node-alert-no-campaign",
+      "name": "Alerta — sin primera campaña",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1540, 200]
+    },
+    {
+      "parameters": { "amount": 7, "unit": "days" },
+      "id": "node-wait-d21",
+      "name": "Esperar 7 días más (día 21)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1540, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.PIPEDRIVE_DOMAIN }}/api/v1/activities",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "api_token", "value": "={{ $env.PIPEDRIVE_API_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ subject: `⚠️ Sin automatización activa — ${$json.title} (día 21)`, deal_id: $json.deal_id, type: 'call', due_date: new Date().toISOString().split('T')[0], due_time: '09:00', note: 'ALERTA: 21 días sin automatización activa. Ofrecer sesión de configuración gratuita de 30 min.' }) }}"
+      },
+      "id": "node-alert-no-automation",
+      "name": "Alerta — sin automatización",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1760, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', deal_id: $json.deal_id, sequence_started: true }) }}"
+      },
+      "id": "node-respond",
+      "name": "Responder webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [880, 480]
+    }
+  ],
+  "connections": {
+    "Webhook — Deal a Business Kickoff": { "main": [[{ "node": "Extraer datos del deal",     "type": "main", "index": 0 }]] },
+    "Extraer datos del deal": {
+      "main": [[
+        { "node": "Registrar inicio en Supabase",    "type": "main", "index": 0 },
+        { "node": "Email de bienvenida",              "type": "main", "index": 0 },
+        { "node": "Crear evento Kickoff en Pipedrive","type": "main", "index": 0 },
+        { "node": "Esperar 14 días",                  "type": "main", "index": 0 },
+        { "node": "Responder webhook",                "type": "main", "index": 0 }
+      ]]
+    },
+    "Esperar 14 días":          { "main": [[{ "node": "¿Tiene primera campaña?",        "type": "main", "index": 0 }]] },
+    "¿Tiene primera campaña?":  { "main": [[{ "node": "Sin primera campaña?",           "type": "main", "index": 0 }]] },
+    "Sin primera campaña?": {
+      "main": [
+        [{ "node": "Alerta — sin primera campaña",  "type": "main", "index": 0 }],
+        [{ "node": "Esperar 7 días más (día 21)",   "type": "main", "index": 0 }]
+      ]
+    },
+    "Alerta — sin primera campaña": { "main": [[{ "node": "Esperar 7 días más (día 21)", "type": "main", "index": 0 }]] },
+    "Esperar 7 días más (día 21)":  { "main": [[{ "node": "Alerta — sin automatización", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "saveManualExecutions": true },
+  "tags": ["OPS", "onboarding", "pipedrive", "supabase", "resend"],
+  "notes": "Disparado por webhook cuando un deal entra en la etapa Business Kickoff. Envía email de bienvenida, crea evento en Pipedrive y monitorea activación en días 14 y 21. Alertas automáticas si no hay primera campaña (D14) o primera automatización (D21). Variables: PIPEDRIVE_API_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_KEY, RESEND_API_KEY."
+}
