@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Health Score Board — emBlue CSM</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #0D0D0D;
+      --card:     #1A1A2E;
+      --border:   #2a2a4a;
+      --accent:   #00D4FF;
+      --danger:   #FF4757;
+      --warn:     #FFA502;
+      --ok:       #2ED573;
+      --muted:    #6b7280;
+      --text:     #e5e7eb;
+      --mono:     'Space Mono', monospace;
+      --sans:     'DM Sans', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-family: var(--mono);
+      font-size: 1.4rem;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+
+    header p { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .badge .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--ok);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── KPI cards ── */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .kpi {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1rem;
+    }
+
+    .kpi .label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .kpi .value {
+      font-family: var(--mono);
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .kpi .sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+
+    .kpi.danger  .value { color: var(--danger); }
+    .kpi.warn    .value { color: var(--warn);   }
+    .kpi.ok      .value { color: var(--ok);     }
+    .kpi.accent  .value { color: var(--accent); }
+
+    /* ── Main table ── */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .section-header h2 {
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--accent);
+    }
+
+    .filters {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .filter-btn.active,
+    .filter-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    thead th {
+      background: var(--card);
+      color: var(--muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-family: var(--mono);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(0,212,255,0.04); }
+
+    tbody td {
+      padding: 0.75rem 1rem;
+      vertical-align: middle;
+    }
+
+    .account-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Score bar */
+    .score-cell { min-width: 130px; }
+
+    .score-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .score-bar {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.6s ease;
+    }
+
+    .score-num {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      width: 28px;
+      text-align: right;
+    }
+
+    /* Risk badges */
+    .risk {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 5px;
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .risk.critical { background: rgba(255,71,87,0.15);  color: var(--danger); border: 1px solid rgba(255,71,87,0.3); }
+    .risk.high     { background: rgba(255,165,2,0.15);  color: var(--warn);   border: 1px solid rgba(255,165,2,0.3); }
+    .risk.medium   { background: rgba(0,212,255,0.1);   color: var(--accent); border: 1px solid rgba(0,212,255,0.2); }
+    .risk.low      { background: rgba(46,213,115,0.1);  color: var(--ok);     border: 1px solid rgba(46,213,115,0.2); }
+
+    .engagement { font-family: var(--mono); font-size: 0.82rem; }
+    .last-login { color: var(--muted); font-size: 0.82rem; }
+
+    .action-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--accent);
+      border-radius: 5px;
+      padding: 0.25rem 0.6rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .action-btn:hover { background: rgba(0,212,255,0.1); }
+
+    /* ── Alerts ── */
+    .alerts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .alert-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--danger);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .alert-card.warn { border-left-color: var(--warn); }
+
+    .alert-card .alert-title {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+
+    .alert-card .alert-detail {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding-top: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    footer p { font-size: 0.75rem; color: var(--muted); }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--accent); }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .kpi .value { font-size: 1.5rem; }
+      thead th:nth-child(4),
+      tbody td:nth-child(4) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Header -->
+  <header>
+    <div>
+      <h1>Health Score Board</h1>
+      <p>emBlue CSM · LATAM · Manger Canterac</p>
+    </div>
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+      <div class="badge">
+        <span class="dot"></span>
+        <span id="last-updated">Cargando...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. KPIs -->
+  <div class="kpis">
+    <div class="kpi accent">
+      <div class="label">Total cuentas</div>
+      <div class="value" id="kpi-total">—</div>
+      <div class="sub">activas en seguimiento</div>
+    </div>
+    <div class="kpi danger">
+      <div class="label">Riesgo crítico</div>
+      <div class="value" id="kpi-critical">—</div>
+      <div class="sub">acción inmediata</div>
+    </div>
+    <div class="kpi warn">
+      <div class="label">Riesgo alto</div>
+      <div class="value" id="kpi-high">—</div>
+      <div class="sub">revisar esta semana</div>
+    </div>
+    <div class="kpi ok">
+      <div class="label">Health promedio</div>
+      <div class="value" id="kpi-avg">—</div>
+      <div class="sub">sobre 100</div>
+    </div>
+  </div>
+
+  <!-- 3. Tabla principal -->
+  <div class="section-header">
+    <h2>Cuentas activas</h2>
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all">Todas</button>
+      <button class="filter-btn" data-filter="critical">Crítico</button>
+      <button class="filter-btn" data-filter="high">Alto</button>
+      <button class="filter-btn" data-filter="medium">Medio</button>
+      <button class="filter-btn" data-filter="low">OK</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="accounts-table">
+      <thead>
+        <tr>
+          <th>Cuenta</th>
+          <th>Health Score</th>
+          <th>Riesgo</th>
+          <th>Engagement</th>
+          <th>Último login</th>
+          <th>NRR</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody id="accounts-body">
+        <tr>
+          <td colspan="7" style="text-align:center; color:var(--muted); padding:2rem;">
+            Conectando con Supabase...
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 4. Alertas -->
+  <div class="section-header">
+    <h2>Alertas — requieren acción</h2>
+  </div>
+  <div class="alerts-grid" id="alerts-grid">
+    <div class="alert-card">
+      <div class="alert-title">Cargando alertas...</div>
+      <div class="alert-detail">Conectando con base de datos</div>
+    </div>
+  </div>
+
+  <!-- 5. Footer -->
+  <footer>
+    <p>OPS_CSM_CORE · <a href="https://github.com/mangerc007/OPS_csm_core" target="_blank">github.com/mangerc007</a></p>
+    <p>Powered by Claude · <a href="https://claude.ai" target="_blank">claude.ai</a></p>
+  </footer>
+
+  <script>
+    // ── Config ──────────────────────────────────────────────────────────
+    const SUPABASE_URL     = window.ENV_SUPABASE_URL     || '';
+    const SUPABASE_ANON    = window.ENV_SUPABASE_ANON    || '';
+
+    // ── Helpers ─────────────────────────────────────────────────────────
+    function scoreColor(s) {
+      if (s < 30)  return 'var(--danger)';
+      if (s < 50)  return 'var(--warn)';
+      if (s < 70)  return 'var(--accent)';
+      return 'var(--ok)';
+    }
+
+    function daysSince(iso) {
+      if (!iso) return '—';
+      const d = Math.floor((Date.now() - new Date(iso)) / 86400000);
+      return d === 0 ? 'hoy' : `hace ${d}d`;
+    }
+
+    function riskBadge(r) {
+      return `<span class="risk ${r}">${r}</span>`;
+    }
+
+    // ── Render ──────────────────────────────────────────────────────────
+    function renderAccounts(rows) {
+      const body = document.getElementById('accounts-body');
+
+      if (!rows || rows.length === 0) {
+        body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;">
+          Sin datos — ejecuta las migraciones SQL y carga cuentas.</td></tr>`;
+        return;
+      }
+
+      let total = rows.length;
+      let critical = 0, high = 0, scoreSum = 0;
+
+      body.innerHTML = rows.map(r => {
+        if (r.risk_level === 'critical') critical++;
+        if (r.risk_level === 'high') high++;
+        scoreSum += r.score;
+        const color = scoreColor(r.score);
+        return `<tr data-risk="${r.risk_level}">
+          <td class="account-name">${r.account_name || `Deal #${r.pipedrive_deal_id}`}</td>
+          <td class="score-cell">
+            <div class="score-bar-wrap">
+              <div class="score-bar">
+                <div class="score-bar-fill" style="width:${r.score}%;background:${color}"></div>
+              </div>
+              <span class="score-num" style="color:${color}">${r.score}</span>
+            </div>
+          </td>
+          <td>${riskBadge(r.risk_level)}</td>
+          <td class="engagement">${r.engagement_rate != null ? r.engagement_rate + '%' : '—'}</td>
+          <td class="last-login">${daysSince(r.last_login)}</td>
+          <td class="engagement">${r.nrr != null ? r.nrr + '%' : '—'}</td>
+          <td><button class="action-btn">Ver deal →</button></td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('kpi-total').textContent    = total;
+      document.getElementById('kpi-critical').textContent = critical;
+      document.getElementById('kpi-high').textContent     = high;
+      document.getElementById('kpi-avg').textContent      = Math.round(scoreSum / total);
+    }
+
+    function renderAlerts(rows) {
+      const grid = document.getElementById('alerts-grid');
+      const urgent = (rows || []).filter(r => r.risk_level === 'critical' || r.risk_level === 'high');
+
+      if (urgent.length === 0) {
+        grid.innerHTML = `<div class="alert-card" style="border-left-color:var(--ok)">
+          <div class="alert-title" style="color:var(--ok)">Sin alertas activas</div>
+          <div class="alert-detail">Todas las cuentas están dentro de umbrales normales.</div>
+        </div>`;
+        return;
+      }
+
+      grid.innerHTML = urgent.map(r => {
+        const cls = r.risk_level === 'critical' ? '' : 'warn';
+        const days = r.last_login ? Math.floor((Date.now() - new Date(r.last_login)) / 86400000) : null;
+        const detail = days !== null
+          ? `Score ${r.score}/100 · Sin login hace ${days} días · NRR ${r.nrr ?? '—'}%`
+          : `Score ${r.score}/100 · Sin datos de login · NRR ${r.nrr ?? '—'}%`;
+        return `<div class="alert-card ${cls}">
+          <div class="alert-title">${r.account_name || `Deal #${r.pipedrive_deal_id}`}</div>
+          <div class="alert-detail">${detail}</div>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Fetch desde Supabase ─────────────────────────────────────────────
+    async function loadData() {
+      document.getElementById('last-updated').textContent =
+        new Date().toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });
+
+      if (!SUPABASE_URL || !SUPABASE_ANON) {
+        // Datos de demo para visualización sin backend
+        const demo = Array.from({ length: 12 }, (_, i) => ({
+          pipedrive_deal_id: 1000 + i,
+          account_name: ['Falabella', 'Ripley', 'Saga', 'BCP', 'Interbank', 'Cencosud',
+                         'Plaza Vea', 'Tottus', 'Wong', 'Metro', 'Oechsle', 'Promart'][i],
+          score:        [18, 24, 38, 45, 52, 61, 68, 74, 80, 85, 90, 95][i],
+          risk_level:   ['critical','critical','high','high','medium','medium','medium','low','low','low','low','low'][i],
+          engagement_rate: [3.1, 5.4, 8.2, 11.0, 15.3, 18.7, 22.1, 28.4, 35.0, 41.2, 48.5, 56.0][i],
+          last_login:   new Date(Date.now() - [45,38,32,28,20,18,14,10,7,5,3,1][i] * 86400000).toISOString(),
+          nrr:          [78, 82, 85, 88, 92, 94, 96, 98, 100, 102, 105, 108][i],
+        }));
+        renderAccounts(demo);
+        renderAlerts(demo);
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/v_latest_health?order=score.asc`,
+          { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` } }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rows = await res.json();
+        renderAccounts(rows);
+        renderAlerts(rows);
+      } catch (e) {
+        console.error(e);
+        document.getElementById('accounts-body').innerHTML =
+          `<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:2rem;">
+            Error al cargar datos: ${e.message}</td></tr>`;
+      }
+    }
+
+    // ── Filtros ──────────────────────────────────────────────────────────
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const f = btn.dataset.filter;
+        document.querySelectorAll('#accounts-body tr[data-risk]').forEach(tr => {
+          tr.style.display = (f === 'all' || tr.dataset.risk === f) ? '' : 'none';
+        });
+      });
+    });
+
+    // ── Init ─────────────────────────────────────────────────────────────
+    loadData();
+    setInterval(loadData, 5 * 60 * 1000); // refresh cada 5 min
+  </script>
+</body>
+</html>
